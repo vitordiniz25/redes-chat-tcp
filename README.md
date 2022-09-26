@@ -12,7 +12,7 @@ gcc -o servidor servidor.c
 ./servidor [ip do servidor] [porta do servidor]
 
 # Exemplo
-./ servidor 127.0.0.1 4000
+./servidor 127.0.0.1 4000
 ```
 
 ## Conectando clientes
@@ -41,7 +41,11 @@ Eae guys, tudo certo?
 
 # Trocar de sala
 /trocar_sala ou /t
-[número da sala desejada]
+$[número da sala desejada]
+
+## Exemplo
+/t
+1
 
 # Sair 
 /s ou /sair
