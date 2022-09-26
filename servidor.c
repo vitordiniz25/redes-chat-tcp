@@ -6,6 +6,7 @@
 
 #define MAX_SALAS 100
 #define MAX_STR_SIZE 256
+#define NOVA_SALA -1
 
 #define true 1
 #define false 0
@@ -15,14 +16,14 @@ typedef int bool;
 typedef struct {
     int cliente_sd;
     char nome[MAX_STR_SIZE];
-    int ativo;
+    bool ativo;
 } cliente;
 
 typedef struct {
     fd_set sala_fd;
     int limite;
     int quantidade;
-    int ativo;
+    bool ativo;
     cliente *clientes;
 } sala;
 
@@ -32,7 +33,10 @@ int fdmax, newfd, nbytes, yes=1, addrlen;
 char buf[MAX_STR_SIZE];
 sala salas[MAX_SALAS];
 
-void inicia_servidor () {
+void prepara_servidor() {
+    // Faz a Limpeza dos sets master 
+    FD_ZERO(&master);
+    FD_ZERO(&read_fds);
     // Inicializacao do servidor, zerando valores de todas as salas
     for (int i = 0; i < MAX_SALAS; i++) {
         FD_ZERO(&salas[i].sala_fd);
@@ -131,7 +135,7 @@ void executa_comando (int sd, int sala_id, int cliente_id) {
 
     // Se o recv retornar 0 ou a mensagem foi de sair
     // retira o socket descriptor do cesto
-    if (strncmp(buf+1, "sair", 4) == 0 ) {
+    if (strncmp(buf+1, "sair", 4) == 0 || strncmp(buf+1, "s", 1) == 0) {
         printf("Desconectando descritor %d\n", sd);
         strcpy(resp_buf, "Cliente Desconectado\n");
         send(sd, resp_buf, strlen(resp_buf), 0);
@@ -141,8 +145,8 @@ void executa_comando (int sd, int sala_id, int cliente_id) {
 
     // Caso o comando seja listar, deve-se passar por todos os
     // clientes ativos da sala e lista-los enviando-os com sends
-    if (strncmp(buf+1, "listar", 6) == 0) {
-        send(sd, "\n===== Clientes Conectados Na Sala =====", 40, 0);
+    if (strncmp(buf+1, "listar", 6) == 0 || strncmp(buf+1, "l", 1) == 0) {
+        send(sd, "\n======= Clientes Conectados Na Sala =======", 40, 0);
         for (int i = 0; i < salas[sala_id].limite; i++) {
             cliente c = salas[sala_id].clientes[i];
             if (c.ativo == 1 && c.cliente_sd != sd) {
@@ -162,7 +166,7 @@ void executa_comando (int sd, int sala_id, int cliente_id) {
 
     // Caso o cliente queira trocar de sala, deve-se executar duas
     // rotinas, a de sair de uma sala e a de inserir em um sala
-    if (strncmp(buf+1, "trocar_sala", 11) == 0) {
+    if (strncmp(buf+1, "trocar_sala", 11) == 0 || strncmp(buf+1, "t", 1) == 0) {
         recv(sd, buf, MAX_STR_SIZE, 0);
         int nova_sala = atoi(buf);
         char nome[MAX_STR_SIZE];
@@ -179,9 +183,7 @@ int main (int argc, char *argv[]) {
     }
 
     // Faz a Limpeza dos sets master e das salas e inicializa o servidor
-    FD_ZERO(&master);
-    FD_ZERO(&read_fds);
-    inicia_servidor();
+    prepara_servidor();
 
     // Configuracao de socket
     int sd = socket(AF_INET, SOCK_STREAM, 0);
@@ -208,29 +210,31 @@ int main (int argc, char *argv[]) {
     int sala;
 
     while(1) {
-        // Informa que o master ira receber descritores de leitura e realiza o select
+        // Informa que o master receberá descritores de leitura e realiza o select
         read_fds = master;
         select(fdmax+1, &read_fds, NULL, NULL, NULL);
 
         for (int i = 0; i <= fdmax; i++) {
-            // Testa para ver se o file descriptor esta no cesto
+            // Testa se o file descriptor esta no cesto
             if (FD_ISSET(i, &read_fds)) {
-                // Checa se o file descriptor e o socket
+                // Checa o file descriptor e o socket
                 if (i == sd) {
-                    // Se for, aceita a conexao e adiciona o socket descriptor no cesto
+                    // Conexao, adiciona o socket descriptor no cesto
                     newfd = accept(sd, (struct sockaddr *)&remoteaddr, &addrlen);
                     FD_SET(newfd, &master);
 
-                    // Recebe nome do usuario e sala que quer entrar
                     int limite, tam_nome;
                     char nome[MAX_STR_SIZE];
+                    // Recebe nome do usuario
                     tam_nome = recv(newfd, nome, MAX_STR_SIZE, 0);
                     tam_nome -= 2;
+                    // Recebe numero da sala
                     recv(newfd, buf, MAX_STR_SIZE, 0);
                     sala = atoi(buf);
                     
-                    // Se a sala for -1, cria uma nova com o limite informado
-                    if (sala == -1) {
+                    // Se a sala -1, cria uma nova
+                    if (sala == NOVA_SALA) {
+                        // informa limite da sala
                         recv(newfd, buf, MAX_STR_SIZE, 0);
                         limite = atoi(buf);
                         sala = cria_sala(limite);
