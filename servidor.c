@@ -4,8 +4,6 @@
 #include <string.h>
 #include <arpa/inet.h>
 
-#define STDIN 0
-#define MAX_SALAS 100
 
 
 fd_set master, read_fds;
@@ -27,7 +25,7 @@ typedef struct {
     cliente *clientes;
 } sala;
 
-sala salas[MAX_SALAS];
+sala salas[100];
 
 
 void envia_msg (int sd, int server_sd, int sala_id, int cliente_id) {
@@ -39,11 +37,11 @@ void envia_msg (int sd, int server_sd, int sala_id, int cliente_id) {
             // e checa se o valor nao e o descritor de si mesmo
             if (j != sd && j != server_sd) {
                 // por fim envia a mensagem para aquele socket descritor
-                char mensagem[500] = "[";
-                strcat(mensagem, salas[sala_id].clientes[cliente_id].nome);
-                strcat(mensagem, "] => ");
-                strcat(mensagem, buf);
-                send(j, mensagem, 500, 0);
+                char msg[500] = "[";
+                strcat(msg, salas[sala_id].clientes[cliente_id].nome);
+                strcat(msg, "] => ");
+                strcat(msg, buf);
+                send(j, msg, 500, 0);
             }
 }
 
@@ -69,7 +67,7 @@ void sair_da_sala (int sd, int sala_id, int cliente_id, int retirar_master) {
 
 void inicia_servidor () {
     // Inicializacao do servidor, zerando todas as salas
-    for (int i = 0; i < MAX_SALAS; i++) {
+    for (int i = 0; i < 100; i++) {
         FD_ZERO(&salas[i].sala_fd);
         salas[i].limite = 0;
         salas[i].quantidade = 0;
@@ -82,7 +80,7 @@ int cria_sala (int limite) {
     // Para criar uma sala, deve-se encontrar a primeira sala
     // vazia (ativo = 0) setar como ativa e atualizar seu limite
     int sala;
-    for (sala = 0; sala < MAX_SALAS; sala++)
+    for (sala = 0; sala < 100; sala++)
         if (salas[sala].ativo == 0)
             break;
 
@@ -102,6 +100,7 @@ int cria_sala (int limite) {
 
 
 void inserir_na_sala(int sd, int sala_id, char nome[], int tam_nome) {
+    
     printf("File descriptor %d entrando na sala %d\n", sd, sala_id);
     // Para inserir na sala, deve-se aumentar a quantidade, adicionar
     // o descritor no cesto da sala, encontra uma posição na sala
@@ -109,12 +108,17 @@ void inserir_na_sala(int sd, int sala_id, char nome[], int tam_nome) {
     // socket descriptor, ativo e nome
     FD_SET(sd, &salas[sala_id].sala_fd);
     salas[sala_id].quantidade++;
-    for (int i = 0; i < salas[sala_id].limite; i++) {
-        if (salas[sala_id].clientes[i].ativo == 0) {
-            salas[sala_id].clientes[i].cliente_sd = sd;
-            salas[sala_id].clientes[i].ativo = 1;
-            strncpy(salas[sala_id].clientes[i].nome, nome, tam_nome);
-            break;
+    if (salas[sala_id].limite < salas[sala_id].quantidade){
+        printf("sala na capacidade maxima!\n");
+    }
+    else {
+        for (int i = 0; i < salas[sala_id].limite; i++) {
+            if (salas[sala_id].clientes[i].ativo == 0) {
+                salas[sala_id].clientes[i].cliente_sd = sd;
+                salas[sala_id].clientes[i].ativo = 1;
+                strncpy(salas[sala_id].clientes[i].nome, nome, tam_nome);
+                break;
+            }
         }
     }
 }
@@ -196,7 +200,7 @@ int main (int argc, char *argv[]) {
 
     // Adiciona os file descriptors no set master
     FD_SET(sd, &master);
-    FD_SET(STDIN, &master);
+    FD_SET(0, &master);
 
     // fdmax -> maior file descriptor (socket descriptor)
     fdmax = sd;
@@ -205,7 +209,7 @@ int main (int argc, char *argv[]) {
 
     int sala;
 
-    for ( ; ; ) {
+    while(1) {
         // Informa que o master ira receber descritores de leitura e realiza o select
         read_fds = master;
         select(fdmax+1, &read_fds, NULL, NULL, NULL);
@@ -250,7 +254,7 @@ int main (int argc, char *argv[]) {
 
                     // Encontra a sala que o descritor do socker se encontra
                     int sala_id;
-                    for (sala_id = 0; sala_id < MAX_SALAS; sala_id++)
+                    for (sala_id = 0; sala_id < 100; sala_id++)
                         if (FD_ISSET(i, &salas[sala_id].sala_fd))
                             break;
 
